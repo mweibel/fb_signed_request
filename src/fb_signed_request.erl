@@ -2,6 +2,9 @@
 
 -export([parse/2, generate/2, generate/3]).
 
+%% Exported for tests
+-export([decode_body/1]).
+
 -define(PADDING, re:compile("(=|%3d)+$", [caseless])).
 -define(SUPPORTED_ALGORITHMS, re:compile("\"algorithm\"\s*:\s*\"HMAC-SHA256\"")).
 
@@ -47,7 +50,8 @@ decode_body(Payload) when is_binary(Payload) ->
 decode_body(Payload) when is_list(Payload) ->
     try
         list_to_binary(
-            base64:decode_to_string( base64_pad(Payload) )
+            base64:decode_to_string(
+                base64_pad( url_safe_decode( Payload ) ) )
         )
     catch
        _:_ -> throw({fb_signed_request, invalid_payload})
@@ -96,6 +100,17 @@ url_safe( Signature ) ->
     Signature
   ).
 
+%% @doc Transforms payload in URL-safe format into decodable format
+url_safe_decode( Payload ) ->
+    lists:map(fun(Element) ->
+        case Element of
+            45 -> 43;
+            95 -> 47;
+            _  -> Element
+        end
+    end,
+    Payload
+  ).
 
 %% @doc Strip trailing '=' from base64 because that is how facebook rolls
 strip_padding( Signature ) ->
@@ -104,6 +119,8 @@ strip_padding( Signature ) ->
         [Result|[]] -> Result;
         Result      -> Result
     end.
+
+
 
 
 %% @doc Add trailing '=' from base64 string
